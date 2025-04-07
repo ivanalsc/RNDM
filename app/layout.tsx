@@ -3,6 +3,8 @@ import "@/app/globals.css"
 import { Inter } from "next/font/google"
 import { Merriweather } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
+import type { Metadata } from "next"
+import { Toaster } from "sonner"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -15,10 +17,9 @@ const merriweather = Merriweather({
   variable: "--font-serif",
 })
 
-export const metadata = {
-  title: "RNDM - Track and share your media experiences",
-  description: "A social platform to track and share your movies, books, and music experiences",
-    generator: 'v0.dev'
+export const metadata: Metadata = {
+  title: "RNDM - Record What You Watch, Read, and Listen To",
+  description: "Track and share your media experiences",
 }
 
 export default function RootLayout({
@@ -32,11 +33,10 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           {children}
         </ThemeProvider>
+        <Toaster />
       </body>
     </html>
   )
 }
-
-
 
 import './globals.css'

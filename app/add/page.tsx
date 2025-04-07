@@ -12,8 +12,12 @@ import { UserNav } from "@/components/user-nav"
 import Link from "next/link"
 import { MediaSearch } from "@/components/media-search"
 import Image from "next/image"
+import { createMediaEntry } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export default function AddEntryPage() {
+  const router = useRouter()
   const [mediaType, setMediaType] = useState<"movie" | "book" | "music">("movie")
   const [selectedMedia, setSelectedMedia] = useState<{
     title: string
@@ -22,6 +26,7 @@ export default function AddEntryPage() {
   } | null>(null)
   const [comment, setComment] = useState("")
   const [isPublic, setIsPublic] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Reset selected media when media type changes
   useEffect(() => {
@@ -39,15 +44,41 @@ export default function AddEntryPage() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement form submission
-    console.log({
-      mediaType,
-      ...selectedMedia,
-      comment,
-      isPublic,
-    })
+    
+    if (!selectedMedia) {
+      toast.error("Please select a media item")
+      return
+    }
+    
+    setIsSubmitting(true)
+    
+    try {
+      // En un entorno real, obtendrías el ID del usuario de la sesión
+      const userId = "user-123" // Esto debería venir de tu sistema de autenticación
+      
+      // Crear la entrada en Supabase
+      await createMediaEntry({
+        user_id: userId,
+        media_type: mediaType,
+        title: selectedMedia.title,
+        creator: selectedMedia.creator,
+        cover_url: selectedMedia.coverUrl,
+        comment,
+        is_public: isPublic
+      })
+      
+      toast.success("Entry saved successfully!")
+      
+      // Redirigir a la página principal
+      router.push("/")
+    } catch (error) {
+      console.error("Error saving entry:", error)
+      toast.error("Failed to save entry. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -142,8 +173,8 @@ export default function AddEntryPage() {
                 <Button variant="outline" asChild>
                   <Link href="/">Cancel</Link>
                 </Button>
-                <Button type="submit" disabled={!selectedMedia}>
-                  Save Entry
+                <Button type="submit" disabled={!selectedMedia || isSubmitting}>
+                  {isSubmitting ? "Saving..." : "Save Entry"}
                 </Button>
               </CardFooter>
             </form>
