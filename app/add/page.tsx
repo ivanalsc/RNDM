@@ -82,8 +82,8 @@ export default function AddEntryPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f8f5f2]">
-      <header className="sticky top-0 z-10 border-b bg-[#f8f5f2]/80 backdrop-blur-sm">
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-sm">
         <div className="container flex h-16 items-center justify-between py-4">
           <MainNav />
           <UserNav />
@@ -96,7 +96,7 @@ export default function AddEntryPage() {
             <p className="text-muted-foreground mt-2">Record what you've watched, read, or listened to</p>
           </div>
 
-          <Card className="max-w-2xl mx-auto border-none shadow-md bg-white">
+          <Card className="max-w-2xl mx-auto">
             <CardHeader>
               <CardTitle className="font-serif">New Entry</CardTitle>
               <CardDescription>Fill in the details about your media experience</CardDescription>

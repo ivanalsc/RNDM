@@ -4,21 +4,21 @@ import { useState, useEffect } from "react"
 import { MediaComment, getComments, addComment, deleteComment } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { formatDistanceToNow } from "date-fns"
 import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import dynamic from "next/dynamic"
+
+// Importar AlertDialog dinámicamente solo en el cliente
+const AlertDialog = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialog), { ssr: false })
+const AlertDialogAction = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialogAction), { ssr: false })
+const AlertDialogCancel = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialogCancel), { ssr: false })
+const AlertDialogContent = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialogContent), { ssr: false })
+const AlertDialogDescription = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialogDescription), { ssr: false })
+const AlertDialogFooter = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialogFooter), { ssr: false })
+const AlertDialogHeader = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialogHeader), { ssr: false })
+const AlertDialogTitle = dynamic(() => import("@/components/ui/alert-dialog").then(mod => mod.AlertDialogTitle), { ssr: false })
 
 interface CommentsProps {
   entryId: string
@@ -31,6 +31,13 @@ export function Comments({ entryId, currentUserId }: CommentsProps) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isClient, setIsClient] = useState(false)
+
+  // Asegurarse de que estamos en el cliente
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   useEffect(() => {
     loadComments()
@@ -70,15 +77,22 @@ export function Comments({ entryId, currentUserId }: CommentsProps) {
 
   const handleDelete = async (commentId: string) => {
     setDeletingId(commentId)
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deletingId) return
+    
     try {
-      await deleteComment(commentId)
-      setComments(comments.filter(comment => comment.id !== commentId))
+      await deleteComment(deletingId, currentUserId)
+      setComments(comments.filter(comment => comment.id !== deletingId))
       toast.success("Comment deleted successfully")
     } catch (error) {
       console.error("Error deleting comment:", error)
       toast.error("Failed to delete comment")
     } finally {
       setDeletingId(null)
+      setShowDeleteDialog(false)
     }
   }
 
@@ -88,74 +102,89 @@ export function Comments({ entryId, currentUserId }: CommentsProps) {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSubmit} className="space-y-2">
+      <div className="flex gap-4">
         <Textarea
-          placeholder="Write a comment..."
+          placeholder="Add a comment..."
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
-          className="min-h-[100px]"
+          className="flex-1 bg-white border-gray-200 text-gray-900"
         />
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Posting..." : "Post Comment"}
+        <Button
+          onClick={handleSubmit}
+          disabled={!newComment.trim() || submitting}
+          className="bg-gray-900 text-white hover:bg-gray-800"
+        >
+          {submitting ? "Posting..." : "Post"}
         </Button>
-      </form>
+      </div>
 
       <div className="space-y-4">
-        {comments.map((comment) => (
-          <div key={comment.id} className="flex gap-4">
-            <Avatar>
-              <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${comment.user_id || 'default'}`} />
-              <AvatarFallback>
-                {comment.user_id?.slice(0, 2).toUpperCase() || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">
-                    {comment.user_id || 'Anonymous'}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {comment.created_at && new Date(comment.created_at).toLocaleDateString()}
-                  </span>
+        {comments.length === 0 ? (
+          <p className="text-center text-gray-500 py-4">No comments yet. Be the first to comment!</p>
+        ) : (
+          comments.map((comment) => (
+            <div key={comment.id} className="flex gap-4">
+              <Avatar>
+                <AvatarFallback className="bg-gray-100 text-gray-900">
+                  {comment.user_id ? comment.user_id.substring(0, 2).toUpperCase() : "AN"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">
+                      {comment.user_id ? `User ${comment.user_id.substring(0, 4)}` : "Anonymous"}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {formatDistanceToNow(new Date(comment.created_at), {
+                        addSuffix: true,
+                      })}
+                    </span>
+                  </div>
+                  {comment.user_id === currentUserId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-gray-500 hover:text-red-500"
+                      onClick={() => handleDelete(comment.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
-                {comment.user_id === currentUserId && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={deletingId === comment.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete your comment.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(comment.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
+                <p className="text-gray-700">{comment.content}</p>
               </div>
-              <p className="mt-1 text-sm">{comment.content}</p>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
+
+      {isClient && (
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent className="bg-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-gray-900">
+                Delete Comment
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-700">
+                Are you sure you want to delete this comment? This action cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-white text-gray-700 border-gray-200">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDelete}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   )
 } 

@@ -219,4 +219,16 @@ export async function deleteComment(commentId: string, userId: string): Promise<
     console.error('Error deleting comment:', error)
     throw error
   }
+}
+
+// Función para obtener el usuario actual
+export async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser()
+  
+  if (error) {
+    console.error('Error getting current user:', error)
+    throw error
+  }
+  
+  return user
 } 

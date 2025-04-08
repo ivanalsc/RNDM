@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandList } from "@/components/ui/command"
+import { useState, useEffect, useRef } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Film, BookOpen, Music, Search } from "lucide-react"
@@ -25,11 +24,21 @@ export function MediaSearch({ mediaType, onSelect }: MediaSearchProps) {
     creator: string
     coverUrl: string
   } | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // Reset selected item when media type changes
   useEffect(() => {
     setSelectedItem(null)
   }, [mediaType])
+
+  // Focus input when popover opens
+  useEffect(() => {
+    if (open && inputRef.current) {
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 0)
+    }
+  }, [open])
 
   // Fetch results when search query changes
   useEffect(() => {
@@ -129,6 +138,7 @@ export function MediaSearch({ mediaType, onSelect }: MediaSearchProps) {
           <div className="flex items-center border-b px-3">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <input
+              ref={inputRef}
               className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               placeholder={getPlaceholder()}
               value={searchQuery}
