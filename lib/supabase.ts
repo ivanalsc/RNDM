@@ -69,46 +69,7 @@ export async function getMediaEntries(userId?: string, isPublic: boolean = true)
     throw error
   }
   
-  // Obtener el conteo de likes y comentarios para cada entrada
-  const entriesWithCounts = await Promise.all(
-    (data as MediaEntry[]).map(async (entry) => {
-      if (!entry.id) return entry
-      
-      // Obtener conteo de likes
-      const { count: likesCount } = await supabase
-        .from('media_likes')
-        .select('*', { count: 'exact', head: true })
-        .eq('entry_id', entry.id)
-      
-      // Obtener conteo de comentarios
-      const { count: commentsCount } = await supabase
-        .from('media_comments')
-        .select('*', { count: 'exact', head: true })
-        .eq('entry_id', entry.id)
-      
-      // Verificar si el usuario actual ha dado like
-      let isLiked: boolean | null = false
-      if (userId) {
-        const { data: likeData } = await supabase
-          .from('media_likes')
-          .select('*')
-          .eq('entry_id', entry.id)
-          .eq('user_id', userId)
-          .limit(1)
-        
-        isLiked = likeData && likeData.length > 0
-      }
-      
-      return {
-        ...entry,
-        likes_count: likesCount || 0,
-        comments_count: commentsCount || 0,
-        is_liked: isLiked
-      }
-    })
-  )
-  
-  return entriesWithCounts as MediaEntry[]
+  return data as MediaEntry[]
 }
 
 export async function getUserMediaEntries(userId: string) {

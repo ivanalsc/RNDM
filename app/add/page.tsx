@@ -15,6 +15,7 @@ import Image from "next/image"
 import { createMediaEntry } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { createClient } from "@/utils/supabase/client"
 
 export default function AddEntryPage() {
   const router = useRouter()
@@ -27,6 +28,36 @@ export default function AddEntryPage() {
   const [comment, setComment] = useState("")
   const [isPublic, setIsPublic] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error("Session error:", sessionError)
+          toast.error("Authentication error. Please log in again.")
+          router.push("/login")
+          return
+        }
+        
+        if (!session) {
+          console.error("No active session")
+          router.push("/login")
+          return
+        }
+
+        setCurrentUserId(session.user.id)
+      } catch (error) {
+        console.error("Error loading user:", error)
+        toast.error("Failed to load user data")
+      }
+    }
+
+    loadUser()
+  }, [router])
 
   // Reset selected media when media type changes
   useEffect(() => {
@@ -52,15 +83,17 @@ export default function AddEntryPage() {
       return
     }
     
+    if (!currentUserId) {
+      toast.error("You need to be logged in to add entries")
+      return
+    }
+    
     setIsSubmitting(true)
     
     try {
-      // En un entorno real, obtendrías el ID del usuario de la sesión
-      const userId = "user-123" // Esto debería venir de tu sistema de autenticación
-      
       // Crear la entrada en Supabase
       await createMediaEntry({
-        user_id: userId,
+        user_id: currentUserId,
         media_type: mediaType,
         title: selectedMedia.title,
         creator: selectedMedia.creator,

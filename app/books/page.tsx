@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { getMediaEntries, deleteMediaEntry, getCurrentUser, MediaEntry } from "@/lib/supabase"
+import { getMediaEntries, deleteMediaEntry, MediaEntry } from "@/lib/supabase"
+import { createClient } from "@/utils/supabase/client"
 
 export default function BooksPage() {
   const router = useRouter()
@@ -21,19 +22,32 @@ export default function BooksPage() {
 
   useEffect(() => {
     const loadUser = async () => {
-      const user = await getCurrentUser()
-      if (!user) {
-        router.push("/login")
-        return
+      try {
+        const supabase = createClient()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error("Session error:", sessionError)
+          toast.error("Authentication error. Please log in again.")
+          router.push("/login")
+          return
+        }
+        
+        if (!session) {
+          console.error("No active session")
+          router.push("/login")
+          return
+        }
+
+        setCurrentUserId(session.user.id)
+        loadEntries()
+      } catch (error) {
+        console.error("Error loading user:", error)
+        toast.error("Failed to load user data")
       }
-      setCurrentUserId(user.id)
     }
     loadUser()
   }, [router])
-
-  useEffect(() => {
-    loadEntries()
-  }, [])
 
   const loadEntries = async () => {
     try {

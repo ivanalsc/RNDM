@@ -42,6 +42,7 @@ interface FeedCardProps {
   currentUserId?: string
   onDelete?: (id: string) => void
   onLikeChange?: (id: string, isLiked: boolean) => void
+  userId?: string
 }
 
 export function FeedCard({
@@ -59,6 +60,7 @@ export function FeedCard({
   currentUserId,
   onDelete,
   onLikeChange,
+  userId,
 }: FeedCardProps) {
   const [liked, setLiked] = useState(initialIsLiked)
   const [likeCount, setLikeCount] = useState(likes)
@@ -153,7 +155,7 @@ export function FeedCard({
                 Private
               </Badge>
             )}
-            {currentUserId && username === currentUserId && (
+            {currentUserId && userId === currentUserId && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button

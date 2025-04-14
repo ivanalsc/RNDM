@@ -2,39 +2,99 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FeedCard } from "@/components/feed-card"
 import { MainNav } from "@/components/main-nav"
 import { UserNav } from "@/components/user-nav"
-import { UserStats } from "@/components/user-stats"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { getUserMediaEntries, getCurrentUser, MediaEntry } from "@/lib/supabase"
-import { formatDistanceToNow } from "date-fns"
+import { FeedCard } from "@/components/feed-card"
+import { Button } from "@/components/ui/button"
+import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { formatDistanceToNow } from "date-fns"
+
+interface MediaEntry {
+  id: string
+  title: string
+  creator: string
+  type: string
+  comment: string
+  coverUrl: string
+  username: string
+  userId: string
+  likes_count: number
+  is_liked: boolean
+  created_at: string
+  is_public: boolean
+}
 
 export default function ProfilePage() {
   const router = useRouter()
   const [entries, setEntries] = useState<MediaEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState("all")
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [entryToDelete, setEntryToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     const loadUserAndEntries = async () => {
       try {
-        const user = await getCurrentUser()
-        if (!user) {
+        const supabase = createClient()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error("Session error:", sessionError)
+          toast.error("Authentication error. Please log in again.")
           router.push("/login")
           return
         }
-        setCurrentUser(user)
         
-        const userEntries = await getUserMediaEntries(user.id)
-        setEntries(userEntries)
-      } catch (error) {
-        console.error("Error loading user data:", error)
-        toast.error("Failed to load profile data")
+        if (!session) {
+          console.error("No active session")
+          router.push("/login")
+          return
+        }
+
+        setCurrentUserId(session.user.id)
+
+        // Consulta para obtener las entradas del usuario actual
+        const { data: userEntries, error: entriesError } = await supabase
+          .from('media_entries')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false })
+
+        if (entriesError) {
+          console.error("Error fetching user entries:", entriesError)
+          toast.error("Failed to load your entries")
+          setLoading(false)
+          return
+        }
+
+        if (!userEntries || userEntries.length === 0) {
+          setEntries([])
+          setLoading(false)
+          return
+        }
+
+        // Formatear las entradas para el componente FeedCard
+        const formattedEntries = userEntries.map(entry => ({
+          id: entry.id,
+          title: entry.title,
+          creator: entry.creator,
+          type: entry.media_type || entry.type,
+          comment: entry.comment,
+          coverUrl: entry.cover_url,
+          username: "You",
+          userId: entry.user_id,
+          likes_count: 0,
+          is_liked: false,
+          created_at: entry.created_at,
+          is_public: entry.is_public || true
+        }))
+
+        setEntries(formattedEntries)
+      } catch (error: any) {
+        console.error("Error loading entries:", error)
+        toast.error("Failed to load your entries")
       } finally {
         setLoading(false)
       }
@@ -43,79 +103,99 @@ export default function ProfilePage() {
     loadUserAndEntries()
   }, [router])
 
-  const filteredEntries = entries.filter(entry => {
-    if (activeTab === "all") return true
-    return entry.media_type === activeTab
-  })
+  const handleDeleteClick = (entryId: string) => {
+    setEntryToDelete(entryId)
+  }
 
-  const stats = {
-    moviesCount: entries.filter(e => e.media_type === "movie").length,
-    booksCount: entries.filter(e => e.media_type === "book").length,
-    musicCount: entries.filter(e => e.media_type === "music").length
+  const handleDeleteConfirm = async () => {
+    if (!entryToDelete) return
+
+    setIsDeleting(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('media_entries')
+        .delete()
+        .eq('id', entryToDelete)
+
+      if (error) throw error
+
+      setEntries(entries.filter(entry => entry.id !== entryToDelete))
+      toast.success("Entry deleted successfully")
+    } catch (error: any) {
+      console.error("Error deleting entry:", error)
+      toast.error("Failed to delete entry")
+    } finally {
+      setIsDeleting(false)
+      setEntryToDelete(null)
+    }
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f8f5f2]">
-      <header className="sticky top-0 z-10 border-b bg-[#f8f5f2]/80 backdrop-blur-sm">
-        <div className="container flex h-16 items-center justify-between py-4">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center">
           <MainNav />
-          <UserNav />
+          <div className="ml-auto flex items-center space-x-4">
+            <UserNav />
+          </div>
         </div>
       </header>
       <main className="flex-1">
         <div className="container py-6">
-          <div className="mb-8">
-            <div className="flex items-center gap-4 mb-4">
-              <Avatar className="h-20 w-20">
-                <AvatarImage src={currentUser?.user_metadata?.avatar_url || "/placeholder.svg?height=80&width=80"} alt={currentUser?.email || "User"} />
-                <AvatarFallback>{currentUser?.email?.slice(0, 2).toUpperCase() || "UN"}</AvatarFallback>
-              </Avatar>
-              <div>
-                <h1 className="text-3xl font-serif font-medium">{currentUser?.email || "Loading..."}</h1>
-                <p className="text-muted-foreground">Joined {currentUser?.created_at ? new Date(currentUser.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : "Loading..."}</p>
-              </div>
-              <Button variant="outline" className="ml-auto">
-                Edit Profile
-              </Button>
+          <div className="flex flex-col items-center space-y-4 mb-8">
+            <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center">
+              <span className="text-2xl font-serif">👤</span>
             </div>
-
-            <UserStats moviesCount={stats.moviesCount} booksCount={stats.booksCount} musicCount={stats.musicCount} />
+            <h1 className="text-2xl font-serif">Your Profile</h1>
+            <Button variant="outline">Edit Profile</Button>
           </div>
-
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-            <TabsList className="grid w-full max-w-md grid-cols-4">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="movie">Movies</TabsTrigger>
-              <TabsTrigger value="book">Books</TabsTrigger>
-              <TabsTrigger value="music">Music</TabsTrigger>
-            </TabsList>
-            <TabsContent value={activeTab} className="mt-6 space-y-6">
-              {loading ? (
-                <div className="text-center py-8">Loading...</div>
-              ) : filteredEntries.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No entries found</div>
-              ) : (
-                filteredEntries.map((entry) => (
-                  <FeedCard
-                    key={entry.id}
-                    id={entry.id || ""}
-                    username={currentUser?.email || ""}
-                    mediaType={entry.media_type}
-                    title={entry.title}
-                    creator={entry.creator}
-                    comment={entry.comment}
-                    likes={entry.likes_count || 0}
-                    isPublic={entry.is_public}
-                    timestamp={entry.created_at ? formatDistanceToNow(new Date(entry.created_at), { addSuffix: true }) : ""}
-                    coverUrl={entry.cover_url}
-                    currentUserId={currentUser?.id}
-                  />
-                ))
-              )}
-            </TabsContent>
-          </Tabs>
+          
+          <div className="grid gap-6">
+            {loading ? (
+              <div className="text-center">Loading your entries...</div>
+            ) : entries.length === 0 ? (
+              <div className="text-center">You haven't shared any media yet.</div>
+            ) : (
+              entries.map((entry) => (
+                <FeedCard
+                  key={entry.id}
+                  id={entry.id}
+                  username={entry.username}
+                  userId={entry.userId}
+                  mediaType={entry.type as "movie" | "book" | "music"}
+                  title={entry.title}
+                  creator={entry.creator}
+                  comment={entry.comment}
+                  likes={entry.likes_count}
+                  isPublic={entry.is_public}
+                  timestamp={formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
+                  coverUrl={entry.coverUrl}
+                  isLiked={entry.is_liked}
+                  currentUserId={currentUserId || undefined}
+                  onDelete={handleDeleteClick}
+                />
+              ))
+            )}
+          </div>
         </div>
       </main>
+      <AlertDialog open={!!entryToDelete} onOpenChange={() => setEntryToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete your entry.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting}>
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

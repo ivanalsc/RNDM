@@ -38,6 +38,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ShareDialog } from "@/components/share-dialog"
 import { BookOpen, Film, Music } from "lucide-react"
 import { FeedCard } from "@/components/feed-card"
+import { createClient } from "@/utils/supabase/client"
+import { useRouter } from "next/navigation"
 
 type MediaType = "movie" | "book" | "music"
 
@@ -54,6 +56,7 @@ interface MediaEntry {
 }
 
 export default function HomePage() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<MediaType>("movie")
   const [title, setTitle] = useState("")
   const [creator, setCreator] = useState("")
@@ -67,18 +70,42 @@ export default function HomePage() {
   const [likingId, setLikingId] = useState<string | null>(null)
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({})
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-
-  // En un entorno real, esto vendría de tu sistema de autenticación
-  const currentUserId = "user-123"
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    loadEntries()
-  }, [])
+    const loadUserAndEntries = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error("Session error:", sessionError)
+          toast.error("Authentication error. Please log in again.")
+          router.push("/login")
+          return
+        }
+        
+        if (!session) {
+          console.error("No active session")
+          router.push("/login")
+          return
+        }
 
-  const loadEntries = async () => {
+        setCurrentUserId(session.user.id)
+        loadEntries(session.user.id)
+      } catch (error) {
+        console.error("Error loading user:", error)
+        toast.error("Failed to load user data")
+      }
+    }
+
+    loadUserAndEntries()
+  }, [router])
+
+  const loadEntries = async (userId: string) => {
     try {
       // Obtener todas las entradas públicas
-      const data = await getMediaEntries(currentUserId, true)
+      const data = await getMediaEntries(userId, true)
       
       // Transformar los datos para que sean compatibles con la interfaz MediaEntry de la página
       const transformedData = data.map(entry => ({
@@ -103,6 +130,8 @@ export default function HomePage() {
   }
 
   const handleDelete = async (entryId: string) => {
+    if (!currentUserId) return
+    
     try {
       setDeletingId(entryId)
       await deleteMediaEntry(entryId, currentUserId)
